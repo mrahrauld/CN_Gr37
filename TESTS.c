@@ -14,11 +14,11 @@ int test_window(){
   
   int i = pkt_get_window(test);
   
-  pkt_set_window(test,(uint8_t) 8);
+   pkt_set_window(test,(uint8_t) 8);
   int b = pkt_get_window(test);
 
-  if(i==0 && b==8){
-    printf("test_window reussi");
+  if(i==0 && b==8 && pkt_set_window(test,(uint8_t) 34)==E_WINDOW){
+    printf("test_window reussi\n");
   }
   
 }

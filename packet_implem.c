@@ -23,6 +23,7 @@ pkt_t* pkt_new()
 {
   pkt_t *new;
   new = malloc(sizeof(struct pkt));
+
   new->window=0;
   return new;
 }
@@ -80,7 +81,12 @@ pkt_status_code pkt_set_type(pkt_t *pkt, const ptypes_t type)
 
 pkt_status_code pkt_set_window(pkt_t *pkt, const uint8_t window)
 {
+  if (window <= (uint8_t) 31 && window >= (uint8_t) 0){
   pkt->window= window;
+  }
+  else {
+    return E_WINDOW;
+  }
 }
 
 pkt_status_code pkt_set_seqnum(pkt_t *pkt, const uint8_t seqnum)
@@ -90,7 +96,7 @@ pkt_status_code pkt_set_seqnum(pkt_t *pkt, const uint8_t seqnum)
 
 pkt_status_code pkt_set_length(pkt_t *pkt, const uint16_t length)
 {
-	/* Your code will be inserted here */
+	
 }
 
 pkt_status_code pkt_set_crc(pkt_t *pkt, const uint32_t crc)
