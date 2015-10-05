@@ -9,16 +9,20 @@ int main ( int argc, char *argv[]){
 }
 
 int test_window(){
-  printf("coucou\n");
   pkt_t *test;
   test = pkt_new();
   
   int i = pkt_get_window(test);
   
-  printf("%d\n",i);
-  printf("hey\n");
   pkt_set_window(test,(uint8_t) 8);
-  i = pkt_get_window(test);
+  int b = pkt_get_window(test);
+
+  if(i==0 && b==8){
+    printf("test_window reussi");
+  }
   
-  printf("%d\n",i);
+}
+
+int test_type(){
+
 }
