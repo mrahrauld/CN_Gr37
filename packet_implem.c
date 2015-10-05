@@ -60,7 +60,7 @@ uint8_t  pkt_get_seqnum(const pkt_t* pkt)
 
 uint16_t pkt_get_length(const pkt_t* pkt)
 {
-	/* Your code will be inserted here */
+  return pkt->length;
 }
 
 uint32_t pkt_get_crc   (const pkt_t* pkt)
@@ -82,7 +82,7 @@ pkt_status_code pkt_set_type(pkt_t *pkt, const ptypes_t type)
 pkt_status_code pkt_set_window(pkt_t *pkt, const uint8_t window)
 {
   if (window <= (uint8_t) 31 && window >= (uint8_t) 0){
-  pkt->window= window;
+  pkt->window = window;
   }
   else {
     return E_WINDOW;
@@ -96,12 +96,17 @@ pkt_status_code pkt_set_seqnum(pkt_t *pkt, const uint8_t seqnum)
 
 pkt_status_code pkt_set_length(pkt_t *pkt, const uint16_t length)
 {
-	
+  if (length >= (uint16_t) 0 && length <= (uint16_t) 512){
+    pkt->length = length;
+  }
+  else{
+    return E_LENGTH;
+  }
 }
 
 pkt_status_code pkt_set_crc(pkt_t *pkt, const uint32_t crc)
 {
-	/* Your code will be inserted here */
+	
 }
 
 pkt_status_code pkt_set_payload(pkt_t *pkt,

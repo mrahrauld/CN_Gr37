@@ -6,6 +6,7 @@
 #include <string.h>
 int main ( int argc, char *argv[]){
   test_window();
+  test_length();
 }
 
 int test_window(){
@@ -25,4 +26,13 @@ int test_window(){
 
 int test_type(){
 
+}
+int test_length(){
+    pkt_t *test;
+  test = pkt_new();
+
+  pkt_set_length(test, (uint16_t) 45);
+  if (pkt_get_length(test)== (uint16_t) 45 && pkt_set_length(test, (uint16_t) 4500)==E_LENGTH){
+    printf("test_length reussi\n");
+  }
 }
