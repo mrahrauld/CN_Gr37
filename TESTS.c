@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <zlib.h>
 int main ( int argc, char *argv[]){
   test_window();
   test_length();
@@ -11,6 +12,7 @@ int main ( int argc, char *argv[]){
   test_seqnum();
   test_payload();
   test_encode();
+  test_decode();
 }
 
 int test_window(){
@@ -71,6 +73,13 @@ int test_payload(){
   char *dat=  pkt_get_payload(test);
   printf("%s\n", dat);
 }
+int print_pkt(pkt_t *pkt){
+  printf("type: %d\n",(int) pkt->type);
+  printf("window: %d\n",(int) pkt->window); 
+  printf("length: %d\n",(int) pkt->length);
+  printf("data: %s\n",pkt->data);
+  printf("CRC: %u\n",pkt->crc);
+}
 
 int test_encode(){
   pkt_t *test;
@@ -86,14 +95,39 @@ int test_encode(){
   pkt_set_window(test,(uint8_t) 3);
   pkt_set_type(test,(ptypes_t) 2);
   pkt_set_seqnum(test,(uint8_t) 70);
+  print_pkt(test);
   
-printf("1\n");
   char *buf = (char*) malloc(sizeof(char*)*2000);
-printf("1\n");
-  size_t *len;
-  len =200;
+  size_t len;
+  len =(size_t)2000;
    printf("1\n"); 
-    pkt_encode(test,buf,len);
-  printf("%s\n", buf);
+    pkt_encode(test,buf,&len);
+  printf("%s\n", buf+4);
   // printf("%d\n", (int) *(buf+3));
 }
+
+int test_decode(){
+   pkt_t *test;
+  test = pkt_new();
+  char *data;
+  data= malloc(sizeof(char)*5);
+  data = "Hello";
+  uint16_t length= 8;
+  pkt_set_payload(test, data, length);
+  pkt_set_window(test,(uint8_t) 3);
+  pkt_set_type(test,(ptypes_t) 2);
+  pkt_set_seqnum(test,(uint8_t) 70);
+  
+  char *buf = (char*) malloc(sizeof(char*)*2000);
+  size_t len;
+  len =(size_t)200;
+  pkt_encode(test,buf,&len);
+  
+  pkt_t *deco;
+  deco = pkt_new();
+  size_t leng;
+  leng =(size_t)16;
+  pkt_decode(buf,leng,deco);
+  print_pkt(deco);
+}
+  
