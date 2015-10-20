@@ -11,14 +11,17 @@
 int send_message(char *buf, int sfd){
       ssize_t read_count = read(STDIN_FILENO,(void *) buf,SIZE);
       if (read_count==-1){
+	printf("error read\n");
 	perror(NULL);
 	return -1;
       } 
       ssize_t write_count = write(sfd,(void *) buf,read_count);
       if (write_count==-1){
+	printf("error write\n");
 	perror(NULL);
 	return -1;
       } 
+      //printf("message sended\n");
       memset((void *) buf,0,sizeof(char)*SIZE);
       return write_count;
 }
@@ -33,18 +36,20 @@ int recieve_message(char *buf, int sfd){
 	perror(NULL);
 	return -1;
       } 
+      //printf("message recieved\n");
       memset((void *) buf,0,sizeof(char)*SIZE);
       return write_count;
-
 }
 void read_write_loop(int sfd){
   int truevalue = 1;
   char buf[SIZE];
-  struct pollfd ptrfd[2];
+  struct pollfd ptrfd[3];
   ptrfd[0].fd = sfd;
   ptrfd[0].events = POLLIN;
   ptrfd[1].fd = STDIN_FILENO;
   ptrfd[1].events = POLLIN;
+  ptrfd[2].fd = STDOUT_FILENO;
+  ptrfd[2].events = POLLOUT;
   int err;
 
   while(truevalue){
@@ -72,4 +77,3 @@ void read_write_loop(int sfd){
   }
   
 }
-
