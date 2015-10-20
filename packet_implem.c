@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <zlib.h>
 #include <math.h>
+#include <string.h>
 /* Extra #includes */
 /* Your code will be inserted here */
 
@@ -26,56 +27,85 @@ pkt_t* pkt_new()
   pkt_t *new;
   new = malloc(sizeof(struct pkt));
 
-  new->window=0;
   return new;
 }
 
 void pkt_del(pkt_t *pkt)
 {
+  free(pkt->data);
   free(pkt);
 }
 
 pkt_status_code pkt_decode(const char *data, const size_t len, pkt_t *pkt)
 {
-  if( len <8){
+  if( len < 4){
     return E_NOHEADER;
   } 
-  pkt->window=(uint8_t) *data & 31;
-  char t = *data >> 5;
-  ptypes_t type = (ptypes_t) t & 7;
-  if (type !=(ptypes_t)  1 && type !=(ptypes_t) 2 && type!=(ptypes_t) 4){
-    return E_TYPE;
+  pkt_status_code err=0;
+  //header
+  int *header=malloc(4*sizeof(char));
+  memcpy((void *)header, (void *) data, 4);
+
+  //type
+  int type = *header >> 29;
+  err = pkt_set_type(pkt,(ptypes_t) type);
+  if(err==E_TYPE){
+    return err;
   }
-  pkt->type= type;
-  pkt->seqnum=(uint8_t )*(data+1);
-  char l =*(data+2) << 8;
-  pkt->length = l |  *(data+3);
-  int length = (int)len -8 ;
-  if (pkt->length != length){
+
+  //window
+  int w = *header << 3;
+  uint8_t window=(uint8_t) (w >> 27);
+  err = pkt_set_window(pkt,window);
+  if(err==E_WINDOW){
+    return err;
+  }
+
+
+  //seqnum
+  int s = *header << 8;
+  uint8_t seqnum=(uint8_t ) (s >> 24) ;
+  err = pkt_set_seqnum(pkt,seqnum);
+  if(err==E_SEQNUM){
+    return err;
+  }
+
+  //length  
+  int l =*header << 16;
+  uint16_t length =(uint16_t) (l>>16);
+  if (length != (uint16_t) len - 8 || length>512){
     return E_LENGTH;
   }
-  printf("??%d\n",length);
+  err = pkt_set_length(pkt,length);
+  if(err==E_LENGTH){
+    return err;
+  }
+  
+  //payload
   char *buf = malloc (sizeof(char)*length);
   int i=0;
   while(i<length){
     *(buf+i)=*(data+4+i);
     i++;
   }
-  pkt->data = buf;
-  uint32_t a = (uint32_t) *(data+4+i) << 24;
-  uint32_t b = (uint32_t) *(data+5+i) << 16;
-  uint32_t c = (uint32_t) *(data+6+i) << 8;
-  uint32_t d = (uint32_t) *(data+7+i);
-  printf("%u\n",d);
-  pkt->crc = a | b | c | d;
+  err = pkt_set_payload(pkt,buf, length);
+  if(err==E_LENGTH){
+    return err;
+  }
+  
+  //crc
+  int crc =0;
+  memcpy((void *)&crc,(void *)&data[len-4],4);
 
-  uLong crc = crc32(0L, Z_NULL, 0);
-  crc = crc32(crc,(const Bytef*) data,length+4);
-  if ( pkt->crc != crc) 
-    {
-      return E_CRC;
-    }
-  return 0;
+  //calcul crc
+  int crc2 = (int) crc32(0, (void *)data, len-4);
+
+  if ( crc != crc2){
+    return E_CRC;
+  }
+  err = pkt_set_crc(pkt, (const uint32_t) crc);
+  
+  return err;
   
 }
 
@@ -84,36 +114,37 @@ pkt_status_code pkt_encode(const pkt_t* pkt, char *buf, size_t *len)
   if (pkt->length+8 > (uint16_t) *len){
     return E_NOMEM;
   }
-  unsigned char b;
-  int type = pkt->type << 5;
-  int window = pkt->window;
-  b= (char) window | type;
-  *buf = b;
-  *(buf+1)= (char) pkt->seqnum;
+  //HEADER
+  char *header=malloc(sizeof(char)*4);
+  uint8_t type = pkt_get_type(pkt) << 5;
+  uint8_t window = pkt_get_window(pkt);
+  uint8_t tw = type | window;
+  memcpy((void *) header, (void *)&tw,1);
+  uint8_t seqnum = pkt_get_seqnum(pkt);
+   memcpy((void *) (header+1), (void *)&seqnum,1);
+  uint16_t length = pkt_get_length(pkt);
+  memcpy((void *) (header+2), (void *) &length,2);
+  const char *data = pkt_get_payload(pkt);
   
-   int l =pkt->length; 
-   *(buf+3)=(char) l & 255;  
-   l = l>>8; 
-   *(buf+2)=(char) l & 255;  
-   printf("2\n"); 
-   int i=0;  
-   while ( i< (pkt->length)){ 
-      *(buf+4+i)=*((pkt->data)+i); 
-      i++;
-   }
-   
-   int len_POST = 4+i;
-   int c = pkt->crc;
-   int j;
-   int k;
-   uLong crc = crc32(0L, Z_NULL, 0);
-	 crc = crc32(crc,(const Bytef *) buf,len_POST);
-   for (j=4 ; j>0 ; j--)
-   {
-    k = 8*j;
-   	*(buf+4+i+j) =(char) c & (int) pow((int) 2,(int) k);
-	 	c = c >> 8*(j-1);
-   }
+  //HEADER ET PAYLOAD
+  memcpy((void *)buf,header,4);
+  memcpy((void *)&buf[4],data,length);
+
+  //PADDING
+  int padding=0;
+  if(length % 4 !=0){
+    padding = 4- (length % 4);
+    int *pad= 0;
+    memcpy((void *)&buf[4+length],pad,padding);
+  }
+
+  //CRC
+  int crc = (int) crc32(0, (const void *) buf, 4+length+padding);
+  memcpy((void *)&buf[4+length+padding],(void *) &crc, 4);
+
+  //len
+  *len = 8+length+padding;
+
    return 0;
    
 }
@@ -151,14 +182,10 @@ const char* pkt_get_payload(const pkt_t* pkt)
 
 pkt_status_code pkt_set_type(pkt_t *pkt, const ptypes_t type)
 {
-		if(type == (ptypes_t)1 || type == (ptypes_t)2 || type == (ptypes_t)4 )
-	{
-		pkt->type = type;
+	if (type!=1&&type!=2&&type!=4){
+	  //	return E_TYPE;
 	}
-	else 
-	{
-		return E_TYPE;
-	}
+	pkt->type = type;
 		return 0;
 }
 
@@ -200,35 +227,28 @@ pkt_status_code pkt_set_payload(pkt_t *pkt,
 							    const char *data,
 								const uint16_t length)
 {
-   int j;
-  if (length> 511){
+  if (length> 512){
     return E_LENGTH;
   }
   else {
     int mod = (length % 4);
     if (mod == 0){
-      char *dat= malloc(sizeof(char)*length);
-      for (j=0;j<length;j++){
-	*(dat+j)=*(data+j);
-      }
+      char *dat= malloc(sizeof(char)*length+1);
+ 	memcpy((void *)dat,(void *) data, length);
     pkt->data= dat;
     pkt->length= length;
     }
     else{
+              int i=0;
       char *dat= malloc(sizeof(char)*(length+4-mod));
-     
-      for (j=0;j<length;j++){
-	*(dat+j)=*(data+j);
-      }
-      printf("paddling...\n");
-      int i;
-      for(i=0;i<4-mod;i++){
-	*(dat+length+i)=(char) 0;
-      }
-      pkt->data= dat;
+     	
+ 		memcpy((void *)dat,(void *) data, length);
+         memcpy((void *)&dat[length],(void *) &i, 4-mod);
+        pkt->data= dat;
       pkt->length= length+4-mod;
     }
   }
   return 0;
   
 }
+
