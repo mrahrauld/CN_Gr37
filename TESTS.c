@@ -6,13 +6,13 @@
 #include <string.h>
 #include <zlib.h>
 int main ( int argc, char *argv[]){
-  test_window();
-  test_length();
-  test_type();
-  test_seqnum();
-  test_payload();
+  /* test_window(); */
+  /* test_length(); */
+  /* test_type(); */
+  /* test_seqnum(); */
+  /* test_payload(); */
   test_encode();
-  test_decode();
+  //test_decode();
 }
 
 int test_window(){
@@ -48,9 +48,12 @@ int test_seqnum()
 	test = pkt_new();
 	pkt_set_seqnum(test,(uint8_t) 47);
 	int i = pkt_get_seqnum(test);
-	if(i==47 && pkt_set_seqnum(test,(uint8_t) 256) == E_SEQNUM)
+	if(i==47)
 	{
 		printf("Test_seqnum reussi\n");
+	}
+	else{
+	  printf("Test_seqnum raté\n");
 	}
 }
 int test_length(){
@@ -58,7 +61,7 @@ int test_length(){
   test = pkt_new();
 
   pkt_set_length(test, (uint16_t) 45);
-  if (pkt_get_length(test)== (uint16_t) 45 && pkt_set_length(test, (uint16_t) 4500)==E_LENGTH){
+  if (pkt_get_length(test)== (uint16_t) 45 && pkt_set_length(test, (uint16_t) 513)==E_LENGTH){
     printf("test_length reussi\n");
   }
 }
@@ -71,7 +74,7 @@ int test_payload(){
   uint16_t length= 5;
   pkt_set_payload(test, data, length);
   char *dat=  pkt_get_payload(test);
-  printf("%s\n", dat);
+  printf("Hello == %s\n", dat);
 }
 int print_pkt(pkt_t *pkt){
   printf("type: %d\n",(int) pkt->type);
@@ -89,21 +92,37 @@ int test_encode(){
   char *data;
   data= malloc(sizeof(char)*5);
   data = "Hello";
-  uint16_t length= 5;
+  uint16_t length= (0);
   pkt_set_payload(test, data, length);
 
-  pkt_set_window(test,(uint8_t) 3);
+  pkt_set_window(test,(uint8_t) 6);
   pkt_set_type(test,(ptypes_t) 2);
-  pkt_set_seqnum(test,(uint8_t) 70);
+  pkt_set_seqnum(test,(uint8_t) 7);
   print_pkt(test);
   
-  char *buf = (char*) malloc(sizeof(char*)*2000);
+  char *buf = (char*) malloc(sizeof(char*)*20000000);
   size_t len;
-  len =(size_t)2000;
+  len =(size_t)20000000;
    printf("1\n"); 
     pkt_encode(test,buf,&len);
-  printf("%s\n", buf+4);
+    affichebin((unsigned) *(buf+2));
+    affichebin((unsigned) *(buf+3));
+    printf("\n");
+  printf("%s\n", buf);
+
   // printf("%d\n", (int) *(buf+3));
+}
+void affichebin(uint8_t n)
+{
+	unsigned bit = 0 ;
+	unsigned mask = 1 ;
+	int i;
+	for (i = 0 ; i < 8 ; i++)
+	{
+		bit = (n & mask) >> i ;
+		printf("%d", bit) ;
+		mask <<= 1 ;
+	}
 }
 
 int test_decode(){
@@ -120,7 +139,7 @@ int test_decode(){
   
   char *buf = (char*) malloc(sizeof(char*)*2000);
   size_t len;
-  len =(size_t)200;
+  len =(size_t)2000;
   pkt_encode(test,buf,&len);
   
   pkt_t *deco;

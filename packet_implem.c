@@ -110,37 +110,52 @@ pkt_status_code pkt_decode(const char *data, const size_t len, pkt_t *pkt)
 }
 
 pkt_status_code pkt_encode(const pkt_t* pkt, char *buf, size_t *len)
-{
-  if (pkt->length+8 > (uint16_t) *len){
+{	
+  if(pkt_get_length(pkt)>512){
+	return E_LENGTH;
+  }
+  if(pkt_get_type(pkt)!=1 && pkt_get_type(pkt)!=2 && pkt_get_type(pkt)!=4){
+	return E_TYPE;
+  }
+  if(pkt_get_window(pkt)>31){
+	return E_WINDOW;
+  }
+  uint16_t length = pkt_get_length(pkt);
+  int padding=0;
+  if(length % 4 !=0){
+    padding = (4- (length % 4));
+  }
+  if (pkt->length+padding+8 > (uint16_t) *len){
     return E_NOMEM;
   }
   //HEADER
-  char *header=malloc(sizeof(char)*4);
+  //char *header=malloc(sizeof(char)*4);
   uint8_t type = pkt_get_type(pkt) << 5;
   uint8_t window = pkt_get_window(pkt);
   uint8_t tw = type | window;
-  memcpy((void *) header, (void *)&tw,1);
+  memcpy((void *) buf, (void *)&tw,1);
   uint8_t seqnum = pkt_get_seqnum(pkt);
-   memcpy((void *) (header+1), (void *)&seqnum,1);
-  uint16_t length = pkt_get_length(pkt);
-  memcpy((void *) (header+2), (void *) &length,2);
+  memcpy((void *) (buf+1), (void *)&seqnum, 1);
+  memcpy((void *) (buf+2), (void *)&length, 2);
   const char *data = pkt_get_payload(pkt);
-  
-  //HEADER ET PAYLOAD
-  memcpy((void *)buf,header,4);
-  memcpy((void *)&buf[4],data,length);
-
-  //PADDING
-  int padding=0;
-  if(length % 4 !=0){
-    padding = 4- (length % 4);
-    int *pad= 0;
-    memcpy((void *)&buf[4+length],pad,padding);
+  if(data==NULL){
+  	return E_NOPAYLOAD;
   }
-
+  
+  //PAYLOAD
+  // memcpy((void *)buf,header,4);
+  memcpy((void *)&buf[4],data,length);
+  //PADDING
+  if(length % 4 !=0){
+    uint8_t pad= 0;
+    int i;
+    for(i=0;i<padding;i++){
+      memcpy((void *)(buf+4+length+i),&pad,1);
+    }
+  }
   //CRC
   int crc = (int) crc32(0, (const void *) buf, 4+length+padding);
-  memcpy((void *)&buf[4+length+padding],(void *) &crc, 4);
+  memcpy((void *)(buf+4+length+padding),(void *) &crc, 4);
 
   //len
   *len = 8+length+padding;
@@ -183,7 +198,7 @@ const char* pkt_get_payload(const pkt_t* pkt)
 pkt_status_code pkt_set_type(pkt_t *pkt, const ptypes_t type)
 {
 	if (type!=1&&type!=2&&type!=4){
-	  //	return E_TYPE;
+		return E_TYPE;
 	}
 	pkt->type = type;
 		return 0;
@@ -227,28 +242,31 @@ pkt_status_code pkt_set_payload(pkt_t *pkt,
 							    const char *data,
 								const uint16_t length)
 {
+    	
   if (length> 512){
     return E_LENGTH;
   }
   else {
-    int mod = (length % 4);
-    if (mod == 0){
-      char *dat= malloc(sizeof(char)*length+1);
+    //int mod = (length % 4);
+    //if (mod == 0){
+      
+      char *dat= malloc(sizeof(char)*(length+1));
  	memcpy((void *)dat,(void *) data, length);
     pkt->data= dat;
     pkt->length= length;
-    }
-    else{
-              int i=0;
-      char *dat= malloc(sizeof(char)*(length+4-mod));
+    /* } */
+    /* else{ */
+    /*           int i=0; */
+    /*   char *dat= malloc(sizeof(char)*(length+4-mod)); */
      	
- 		memcpy((void *)dat,(void *) data, length);
-         memcpy((void *)&dat[length],(void *) &i, 4-mod);
-        pkt->data= dat;
-      pkt->length= length+4-mod;
-    }
+    /* 		memcpy((void *)dat,(void *) data, length); */
+    /*      memcpy((void *)&dat[length],(void *) &i, 4-mod); */
+    /*     pkt->data= dat; */
+    /*   pkt->length= length+4-mod; */
+    /* } */
   }
   return 0;
   
 }
+
 
