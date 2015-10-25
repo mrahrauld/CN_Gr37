@@ -10,8 +10,14 @@
 #include "create_socket.h"
 #include "read_write_loop.h"
 #include "wait_for_client.h"
+#include "packet_interface.h"
 
-#define SIZE 1024
+#define SIZE 512
+
+pkt_t *pkt_buf[31];
+int max_window= 5;
+int c_window=5; //place dans la window actuelle
+int c_seqnum=0; //prochain seqnum attendu
 
 
 int wait_connection (char *hostname, int port)
@@ -21,11 +27,8 @@ int wait_connection (char *hostname, int port)
       fprintf(stderr, "Invalid port!\n");
       return EXIT_FAILURE;
     }
-  printf("wait_connection\n");
   struct sockaddr_in6 *addr = malloc(sizeof(struct sockaddr_in6 *));
-  printf("real_adress\n");
   real_address(hostname,addr);
-  printf("real_adress\n");
   int sfd = create_socket(addr,port,NULL,-1);
   if (sfd < 0)
     {
@@ -41,32 +44,100 @@ int wait_connection (char *hostname, int port)
   return sfd;	
 }
 
-/* int set_Ack() */
-/* {} */
+/* int read_packet(char *packet, int sfd) */
+/* { */
+/*   ssize_t read_count = read(sfd,(void *) packet,SIZE); */
+/*   if (read_count==-1) */
+/*     { */
+/*       perror(NULL); */
+/*       printf("error read\n"); */
+/*       return -1; */
+/*     }  */
+/*   return read_count; */
+/* }   */
+void move_pkt_buf(int decalage){
+  int i;
+  c_window=max_window;
+  for(i=0;i<=10;i++){
+    if(pkt_buf[decalage+i]!=NULL){
+      c_window--;
+    }
+    pkt_buf[i]=pkt_buf[i+decalage];
+  }
 
-/* int read_message(char *buf, int sfd) */
-/* {} */
+}
 
-/* int read_file(char *file, int sfd) */
-/* {} */
-/* void move_window() */
-/* {} */
-
-/* int read_loop(int sfd) */
-/* {} */
-
-
-int read_packet(char *packet, int sfd)
-{
-  ssize_t read_count = read(sfd,(void *) packet,SIZE);
-  if (read_count==-1)
-    {
+pkt_t *recieve_packet(char *buf,int sfd){
+  ssize_t read_count = read(sfd,(void *) buf,SIZE+8);
+  if (read_count==-1){
+    perror(NULL);
+    return NULL;
+  }   
+      printf("quoi\n");
+  pkt_t *pkt = pkt_new();
+  pkt_status_code err= pkt_decode(buf,read_count,pkt);
+  memset((void *) buf,0,sizeof(char)*SIZE);
+  if(err!=0){
+    printf("erreur decode\n"); //SEND NACK TMTC MA GUEULE
+    return NULL;
+  }
+  int count=pkt_get_seqnum(pkt)-c_seqnum;
+  if(count==0){ //si il s'agit du packet attendu
+    ssize_t write_count = write(STDOUT_FILENO,(void *) pkt_get_payload(pkt),read_count);
+    if (write_count==-1){
+      printf("erreur\n");
       perror(NULL);
-      printf("error read\n");
-      return -1;
-    } 
-  return read_count;
-}      
+    }
+    while(pkt_buf[count]!=NULL){ //on vide le buffer des éléments consécutifs
+      
+      ssize_t write_count = write(STDOUT_FILENO,(void *) pkt_get_payload(pkt_buf[count]),read_count);
+      if (write_count==-1){
+	printf("erreur\n");
+	perror(NULL);
+      }
+      count++;
+    }
+    send_ack(c_seqnum+count,sfd); //on envoi un ack
+    move_pkt_buf(count+1);
+    c_seqnum=c_seqnum+1+count;
+  }
+  else if( count < max_window &&  pkt_buf[count]!=NULL){ //si il est dans la window et qu'il n'a pas deja été recu
+    pkt_buf[count]=pkt; //on le met dans le buffer
+    c_window--;
+  }
+  else { //sinon, on le nie // ENVOYER UN ACK?????
+    pkt_del(pkt);
+    return NULL;
+  }
+  
+ 
+  return pkt;
+
+}
+
+int send_ack(int seqnum, int sfd){
+  char *ack=malloc(sizeof(char)*10);
+  create_packet(PTYPE_ACK, c_window, seqnum+1 % 255 , 0, NULL, ack);
+    ssize_t write_count = write(sfd,(void *) ack,8);
+  if (write_count==-1){
+    printf("erreur\n");
+    perror(NULL);
+    return NULL;
+  } 
+}
+
+int send_nack(int seqnum, int sfd){
+  char *ack;
+  create_packet(PTYPE_NACK, c_window, seqnum+1 % 255 , 0, NULL, ack);
+  ssize_t write_count = write(sfd,(void *) ack,8);
+  if (write_count==-1){
+    printf("erreur\n");
+    perror(NULL);
+    return NULL;
+  } 
+}
+
+    
 int recieve_data(int sfd){
   int boucle=1;
   char buf[SIZE];
@@ -83,7 +154,11 @@ int recieve_data(int sfd){
       return err;
     }
     if(ptrfd[0].revents == POLLIN){
-      err=recieve_message(buf,sfd);
+      pkt_t *pkt;
+       printf("\n seqnum");
+      pkt=recieve_packet(buf,sfd);
+      printf("\n seqnum");
+      printf("\n seqnum: %d \n", pkt_get_seqnum(pkt));
       if (err==-1){
 	return err;
       }
@@ -124,9 +199,7 @@ int main(int argc,char *argv[])
     }
   else
     {
-      printf("filename\n");
       hostname = argv[i+1];
-      printf("filename\n");
       sfd = wait_connection(hostname, atoi(argv[i+2]));
     }
   if (sfd == -1)

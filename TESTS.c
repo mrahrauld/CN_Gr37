@@ -11,8 +11,8 @@ int main ( int argc, char *argv[]){
   /* test_type(); */
   /* test_seqnum(); */
   /* test_payload(); */
-  test_encode();
-  //test_decode();
+  //test_encode();
+  test_decode();
 }
 
 int test_window(){
@@ -76,13 +76,6 @@ int test_payload(){
   char *dat=  pkt_get_payload(test);
   printf("Hello == %s\n", dat);
 }
-int print_pkt(pkt_t *pkt){
-  printf("type: %d\n",(int) pkt->type);
-  printf("window: %d\n",(int) pkt->window); 
-  printf("length: %d\n",(int) pkt->length);
-  printf("data: %s\n",pkt->data);
-  printf("CRC: %u\n",pkt->crc);
-}
 
 int test_encode(){
   pkt_t *test;
@@ -91,13 +84,13 @@ int test_encode(){
 
   char *data;
   data= malloc(sizeof(char)*5);
-  data = "Hello";
-  uint16_t length= (0);
+  data = "talle";
+  uint16_t length= (6);
   pkt_set_payload(test, data, length);
 
   pkt_set_window(test,(uint8_t) 6);
   pkt_set_type(test,(ptypes_t) 2);
-  pkt_set_seqnum(test,(uint8_t) 7);
+  pkt_set_seqnum(test,(uint8_t) 9);
   print_pkt(test);
   
   char *buf = (char*) malloc(sizeof(char*)*20000000);
@@ -105,8 +98,8 @@ int test_encode(){
   len =(size_t)20000000;
    printf("1\n"); 
     pkt_encode(test,buf,&len);
-    affichebin((unsigned) *(buf+2));
-    affichebin((unsigned) *(buf+3));
+    affichebin((unsigned) *(buf+4));
+    //affichebin((unsigned) *(buf+3));
     printf("\n");
   printf("%s\n", buf);
 
@@ -130,8 +123,8 @@ int test_decode(){
   test = pkt_new();
   char *data;
   data= malloc(sizeof(char)*5);
-  data = "Hello";
-  uint16_t length= 8;
+  data = "Hellos";
+  uint16_t length= 6;
   pkt_set_payload(test, data, length);
   pkt_set_window(test,(uint8_t) 3);
   pkt_set_type(test,(ptypes_t) 2);
@@ -141,12 +134,14 @@ int test_decode(){
   size_t len;
   len =(size_t)2000;
   pkt_encode(test,buf,&len);
-  
+  print_pkt(test);
   pkt_t *deco;
   deco = pkt_new();
   size_t leng;
   leng =(size_t)16;
-  pkt_decode(buf,leng,deco);
+  if(pkt_decode(buf,leng,deco)!=PKT_OK){
+    printf("erreur decode");
+  }
   print_pkt(deco);
 }
   

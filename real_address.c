@@ -18,8 +18,6 @@ const char * real_address(const char *address, struct sockaddr_in6 *rval){
   }
   struct sockaddr_in6 *t = (struct sockaddr_in6 *) res->ai_addr;
      *rval=*t;
-  // memcpy(rval, res->ai_addr, res->ai_addrlen);
-  //rval->sin6_family=AF_INET6;
   freeaddrinfo(res);
 
   return 0;

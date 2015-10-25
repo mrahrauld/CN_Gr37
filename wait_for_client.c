@@ -17,9 +17,7 @@ int wait_for_client(int sfd)
   // address.sin6_family = AF_INET6;
   socklen_t address_len = sizeof ( struct sockaddr_in6);
   struct sockaddr_in6 *address = malloc(sizeof(struct sockaddr_in6));
-  printf("wait for %d\n",sfd);
   int err = recvfrom(sfd,(void *) buf, 1024, MSG_PEEK,(struct sockaddr *) address, &address_len);
-  printf("wait for %d\n",sfd);
   if (err == -1)
     {
       fprintf(stderr, "%s\n", strerror(errno));
@@ -28,7 +26,6 @@ int wait_for_client(int sfd)
       perror(NULL);
 	  return -1;
     }
-  printf("%d\n",sfd);
   err = connect(sfd, (struct sockaddr *) address, address_len);
   if (err == -1)
     {

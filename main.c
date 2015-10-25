@@ -33,7 +33,7 @@ const char * real_address(const char *address, struct sockaddr_in6 *rval){
   return 0;
 }
 
-int create_socket(struct sockaddr_in6 *source_addr,
+&int create_socket(struct sockaddr_in6 *source_addr,
                  int src_port,
                  struct sockaddr_in6 *dest_addr,
                  int dst_port){
