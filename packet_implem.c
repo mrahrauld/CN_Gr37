@@ -113,9 +113,9 @@ pkt_status_code pkt_decode(const char *data, const size_t len, pkt_t *pkt)
     return E_CRC;
   }
   err = pkt_set_crc(pkt, (const uint32_t) crc);
-  
+    free(header);
+  free(buf);
   return err;
-  
 }
 
 pkt_status_code pkt_encode(const pkt_t* pkt, char *buf, size_t *len)
@@ -312,6 +312,7 @@ int create_packet(uint8_t type, uint8_t window, uint8_t seqnum, uint16_t length,
   if (lenght_packet % 4 != 0){
     lenght_packet= lenght_packet + 4 - (lenght_packet % 4);
   }
+  pkt_del(pkt);
   return lenght_packet;
 
 }

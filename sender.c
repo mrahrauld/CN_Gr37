@@ -32,12 +32,16 @@ int create_connection(char *hostname,int port){
     return EXIT_FAILURE;
   }
   printf("sfd : %d \n", sfd);
+  free(retour);
   return sfd;
 }
 
 void move_buf_frame(int decalage){
   int i;
   for (i=0;i<=10;i++){
+    if(buf_frame[i]!=NULL){
+    free(buf_frame[i]);
+    }
     buf_frame[i]=buf_frame[i+decalage];
   }
 }
@@ -56,7 +60,7 @@ pkt_t *recieve_packet(char *buf,int sfd){
      printf("erreur decode\n");
     return NULL;
   }
-
+  
   ssize_t write_count = write(STDOUT_FILENO,(void *) pkt_get_payload(pkt),read_count);
   if (write_count==-1){
     printf("erreur\n");
@@ -107,6 +111,15 @@ int send_file(char *file, int sfd){
   ptrfd[0].fd = sfd;
   ptrfd[0].events = POLLIN;
   int err;
+
+  struct timeval *timer = malloc(sizeof(struct timeval));
+  timer->tv_sec=2;
+  timer->tv_usec=0;
+  
+  fd_set *readfds = malloc(sizeof(fd_set));
+  FD_ZERO(readfds);
+  FD_SET(sfd, readfds);
+  FD_SET(STDIN_FILENO, readfds);
   
   //Envoi du premier paquet
   size_t fin=fread( buf , sizeof(char), SIZE , fichier );
@@ -114,26 +127,41 @@ int send_file(char *file, int sfd){
   if (err==-1){
     return err;
   }
-
   while(fin!=0){
-    err = poll(ptrfd,(nfds_t) 1,200);
-    //printf("poll\n");
-    if(err <= -1){
-      perror(NULL);
-      return err;
-    }
-    //printf("  %d  ",err);
-    if (err==0){ //si le timer s'écoule, on renvoi le dernier attendu
-      ssize_t write_count = write(sfd,(void *)buf_frame[0], SIZE+8);
-	if (write_count== -1){
-	  printf("error write\n");
-	  perror(NULL);
-	  return -1;
-	}
-    }
-    if(ptrfd[0].revents == POLLIN){ // de l'information est prête à être lue
+
+    FD_ZERO(readfds);
+    FD_SET(sfd, readfds);
+    
+    int err = select(sfd+1,readfds,NULL,NULL,timer);
+    /* // err = poll(ptrfd,(nfds_t) 1,200); */
+    /* //printf("poll\n"); */
+    /* if(err <= -1){ */
+    /*   perror(NULL); */
+    /*   return err; */
+    /* } */
+    /* printf("err : %d \n",err); */
+    /* if(err == 0 && i == 0){ */
+    /*   i++; */
+    /*   //err=send_packet(buf,sfd,fin,0,0); */
+    /*   if (err==-1){ */
+    /* 	return err; */
+    /*   } */
+    /*   printf("er"); */
+      
+    /* } */
+    /* if(err==1 && i <=1){ */
+    /*   printf("ah"); */
+    /*   //size_t fin= read(sfd , (void *) buf, SIZE+8); */
+    /*   printf("bi"); */
+    /*   //printf("%s \n",(buf+4)); */
+    /*   printf("bi"); */
+    /* } */
+    if(FD_ISSET(sfd, readfds)){ // de l'information est prête à être lue
+       printf("1\n");
       pkt_t *ack=recieve_packet(buf2,sfd);
+      printf("recieved\n");
       if (pkt_get_type(ack)==PTYPE_ACK){
+	printf("ack\n");
 	move_buf_frame(pkt_get_seqnum(ack)-s_seqnum);
 	s_seqnum= pkt_get_seqnum(ack);
 	printf("s_seqnum : %d\n",s_seqnum);
@@ -147,17 +175,28 @@ int send_file(char *file, int sfd){
 	    }
 	    err=send_packet(buf,sfd,fin,last_seqnum-s_seqnum+1,last_seqnum+1);
 	    if (err==-1){
+	      pkt_del(ack);
 	      return err;
 	    }
 	    last_seqnum++;
 	}
       }
-      else if (pkt_get_type(ack)==PTYPE_NACK){
+      else if (pkt_get_type(ack)==PTYPE_NACK){ //il faut renvoyer le paquet qui a perdu des données
 	
+	  ssize_t write_count = write(sfd,(void *) buf_frame[pkt_get_seqnum(ack)-s_seqnum+1],SIZE+8);
+	if (write_count== -1){
+	  printf("error write\n");
+	  perror(NULL);
+	  return -1;
+	}
       }
+      pkt_del(ack);
     }
+     timer->tv_sec=2;
   }
-
+  free(timer);
+  free(readfds);
+  fclose(fichier);
       /* err=send_packet(buf,sfd,fin); */
       /* if (err==-1){ */
       /* 	return err; */
@@ -236,5 +275,9 @@ int main(int argc,char *argv[]){
     {
        exit(EXIT_FAILURE);
     }
+  int j;
+  for(j=0;i<=30;j++){
+    //free(buf_frame[j]);
+  }
 return EXIT_SUCCESS;
 }

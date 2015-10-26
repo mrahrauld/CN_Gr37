@@ -6,13 +6,13 @@
 #include <string.h>
 #include <zlib.h>
 int main ( int argc, char *argv[]){
-  /* test_window(); */
+  // test_window();
   /* test_length(); */
   /* test_type(); */
   /* test_seqnum(); */
   /* test_payload(); */
-  //test_encode();
-  test_decode();
+  test_encode();
+  //test_decode();
 }
 
 int test_window(){
@@ -27,6 +27,7 @@ int test_window(){
   if(i==0 && b==8 && pkt_set_window(test,(uint8_t) 34)==E_WINDOW){
     printf("test_window reussi\n");
   }
+  pkt_del(test);
   
 }
 
@@ -40,6 +41,7 @@ int test_type()
 	{
 		printf("Test_type reussi\n");
 	}
+	pkt_del(test);
 }
 
 int test_seqnum()
@@ -55,6 +57,7 @@ int test_seqnum()
 	else{
 	  printf("Test_seqnum raté\n");
 	}
+	pkt_del(test);
 }
 int test_length(){
     pkt_t *test;
@@ -64,6 +67,7 @@ int test_length(){
   if (pkt_get_length(test)== (uint16_t) 45 && pkt_set_length(test, (uint16_t) 513)==E_LENGTH){
     printf("test_length reussi\n");
   }
+  pkt_del(test);
 }
 int test_payload(){
   pkt_t *test;
@@ -75,6 +79,8 @@ int test_payload(){
   pkt_set_payload(test, data, length);
   char *dat=  pkt_get_payload(test);
   printf("Hello == %s\n", dat);
+  pkt_del(test);
+  free(data);
 }
 
 int test_encode(){
@@ -104,6 +110,9 @@ int test_encode(){
   printf("%s\n", buf);
 
   // printf("%d\n", (int) *(buf+3));
+  free(test->data);
+  pkt_del(test);
+  free(buf);
 }
 void affichebin(uint8_t n)
 {
