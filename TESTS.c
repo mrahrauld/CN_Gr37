@@ -110,7 +110,6 @@ int test_encode(){
   printf("%s\n", buf);
 
   // printf("%d\n", (int) *(buf+3));
-  free(test->data);
   pkt_del(test);
   free(buf);
 }

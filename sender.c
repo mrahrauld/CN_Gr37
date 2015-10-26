@@ -1,3 +1,4 @@
+
 #include <stdlib.h> /* EXIT_X */
 #include <stdio.h> /* fprintf */
 #include <unistd.h> /* getopt */
@@ -32,16 +33,12 @@ int create_connection(char *hostname,int port){
     return EXIT_FAILURE;
   }
   printf("sfd : %d \n", sfd);
-  free(retour);
   return sfd;
 }
 
 void move_buf_frame(int decalage){
   int i;
   for (i=0;i<=10;i++){
-    if(buf_frame[i]!=NULL){
-    free(buf_frame[i]);
-    }
     buf_frame[i]=buf_frame[i+decalage];
   }
 }
@@ -60,13 +57,7 @@ pkt_t *recieve_packet(char *buf,int sfd){
      printf("erreur decode\n");
     return NULL;
   }
-  
-  ssize_t write_count = write(STDOUT_FILENO,(void *) pkt_get_payload(pkt),read_count);
-  if (write_count==-1){
-    printf("erreur\n");
-    perror(NULL);
-    return NULL;
-  } 
+  //printf("\n WTF \n");
  memset((void *) buf,0,sizeof(char)*SIZE);
   return pkt;
 
@@ -106,103 +97,139 @@ int send_file(char *file, int sfd){
        printf("Impossible d'ouvrir le fichier\n");
      }
   char buf[SIZE+8];
-
+  int end=1;
+  
   struct pollfd ptrfd[2];
   ptrfd[0].fd = sfd;
   ptrfd[0].events = POLLIN;
   int err;
-
-  struct timeval *timer = malloc(sizeof(struct timeval));
-  timer->tv_sec=2;
-  timer->tv_usec=0;
   
-  fd_set *readfds = malloc(sizeof(fd_set));
-  FD_ZERO(readfds);
-  FD_SET(sfd, readfds);
-  FD_SET(STDIN_FILENO, readfds);
-  
-  //Envoi du premier paquet
   size_t fin=fread( buf , sizeof(char), SIZE , fichier );
   err=send_packet(buf,sfd,fin,0,0);
   if (err==-1){
     return err;
   }
-  while(fin!=0){
 
-    FD_ZERO(readfds);
-    FD_SET(sfd, readfds);
-    
-    int err = select(sfd+1,readfds,NULL,NULL,timer);
-    /* // err = poll(ptrfd,(nfds_t) 1,200); */
-    /* //printf("poll\n"); */
-    /* if(err <= -1){ */
-    /*   perror(NULL); */
-    /*   return err; */
-    /* } */
-    /* printf("err : %d \n",err); */
-    /* if(err == 0 && i == 0){ */
-    /*   i++; */
-    /*   //err=send_packet(buf,sfd,fin,0,0); */
-    /*   if (err==-1){ */
-    /* 	return err; */
-    /*   } */
-    /*   printf("er"); */
-      
-    /* } */
-    /* if(err==1 && i <=1){ */
-    /*   printf("ah"); */
-    /*   //size_t fin= read(sfd , (void *) buf, SIZE+8); */
-    /*   printf("bi"); */
-    /*   //printf("%s \n",(buf+4)); */
-    /*   printf("bi"); */
-    /* } */
-    if(FD_ISSET(sfd, readfds)){ // de l'information est prête à être lue
-       printf("1\n");
-      pkt_t *ack=recieve_packet(buf2,sfd);
-      printf("recieved\n");
-      if (pkt_get_type(ack)==PTYPE_ACK){
-	printf("ack\n");
-	move_buf_frame(pkt_get_seqnum(ack)-s_seqnum);
-	s_seqnum= pkt_get_seqnum(ack);
-	printf("s_seqnum : %d\n",s_seqnum);
-	s_window = pkt_get_window(ack);
-	printf("s_window : %d\n",s_window);
-	int i;
-	for (i=0;i<=s_window-(last_seqnum-s_seqnum);i++){
-	  fin=fread( buf , sizeof(char), SIZE , fichier );
-	    if(fin==0){
-	      break;
-	    }
-	    err=send_packet(buf,sfd,fin,last_seqnum-s_seqnum+1,last_seqnum+1);
-	    if (err==-1){
-	      pkt_del(ack);
-	      return err;
-	    }
-	    last_seqnum++;
-	}
-      }
-      else if (pkt_get_type(ack)==PTYPE_NACK){ //il faut renvoyer le paquet qui a perdu des données
-	
-	  ssize_t write_count = write(sfd,(void *) buf_frame[pkt_get_seqnum(ack)-s_seqnum+1],SIZE+8);
+  while(fin!=0 || end==1){
+    err = poll(ptrfd,(nfds_t) 1,200);
+    //printf("poll\n");
+    if(err <= -1){
+      perror(NULL);
+      return err;
+    }
+    //printf("  %d  ",err);
+    if (err==0){ //si le timer s'écoule, on renvoi le dernier attendu
+      ssize_t write_count = write(sfd,(void *)buf_frame[0], SIZE+8);
 	if (write_count== -1){
 	  printf("error write\n");
 	  perror(NULL);
 	  return -1;
 	}
-      }
-      pkt_del(ack);
     }
-     timer->tv_sec=2;
+    if(ptrfd[0].revents == POLLIN){ // de l'information est prête à être lue
+
+      /* fin=fread( buf , sizeof(char), SIZE , fichier ); */
+      /* if(fin==0){ */
+      /* 	break; */
+      /* } */
+      /* err=send_packet(buf,sfd,fin,last_seqnum-s_seqnum+1,3); */
+      /* if (err==-1){ */
+      /* 	return err; */
+      /* } */
+      /* fin=fread( buf , sizeof(char), SIZE , fichier ); */
+      /* if(fin==0){ */
+      /* 	break; */
+      /* } */
+      /* err=send_packet(buf,sfd,fin,last_seqnum-s_seqnum+1,2); */
+      /* if (err==-1){ */
+      /* 	return err; */
+      /* } */
+      /* fin=fread( buf , sizeof(char), SIZE , fichier ); */
+      /* if(fin==0){ */
+      /* 	break; */
+      /* } */
+      /* fin=fread( buf , sizeof(char), SIZE , fichier ); */
+      /* if(fin==0){ */
+      /* 	break; */
+      /* } */
+      /* err=send_packet(buf,sfd,fin,last_seqnum-s_seqnum+1,1); */
+      /* if (err==-1){ */
+      /* 	return err; */
+      /* } */
+      /* fin=fread( buf , sizeof(char), SIZE , fichier ); */
+      /* if(fin==0){ */
+      /* 	break; */
+      /* } */
+      /* err=send_packet(buf,sfd,fin,last_seqnum-s_seqnum+1,4); */
+      /* if (err==-1){ */
+      /* 	return err; */
+      /* } */
+      /* fin=fread( buf , sizeof(char), SIZE , fichier ); */
+      /* if(fin==0){ */
+      /* 	break; */
+      /* } */
+      /* err=send_packet(buf,sfd,fin,last_seqnum-s_seqnum+1,6); */
+      /* if (err==-1){ */
+      /* 	return err; */
+      /* } */
+      /* fin=fread( buf , sizeof(char), SIZE , fichier ); */
+      /* if(fin==0){ */
+      /* 	break; */
+      /* } */
+      /* err=send_packet(buf,sfd,fin,last_seqnum-s_seqnum+1,5); */
+      /* if (err==-1){ */
+      /* 	return err; */
+      /* } */
+      /* fin=fread( buf , sizeof(char), SIZE , fichier ); */
+      /* if(fin==0){ */
+      /* 	break; */
+      /* } */
+      /* err=send_packet(buf,sfd,fin,last_seqnum-s_seqnum+1,1); */
+      /* if (err==-1){ */
+      /* 	return err; */
+      /* } */
+      
+      
+      pkt_t *ack=recieve_packet(buf2,sfd);
+      printf("\n ack : %d \n",pkt_get_seqnum(ack));
+      if (pkt_get_type(ack)==PTYPE_ACK){
+	if (fin ==0 && pkt_get_seqnum(ack)== last_seqnum){
+	  printf("end\n");
+	  break;
+	}
+	move_buf_frame(pkt_get_seqnum(ack)-s_seqnum);
+	s_seqnum= pkt_get_seqnum(ack);
+	printf("s_seqnum : %d\n",s_seqnum);
+	s_window = pkt_get_window(ack);
+	printf("s_window : %d\n",s_window);
+	printf("last_seqnum : %d\n",last_seqnum);
+	int i;
+	int already_send = last_seqnum-s_seqnum+1; //deja envoyés dans la window
+	for (i=0;i<s_window-already_send;i++){
+	  printf("in for seqnum : %d \n",last_seqnum+1);
+	  fin=fread( buf , sizeof(char), SIZE , fichier );
+	    if(fin!=0){
+	    err=send_packet(buf,sfd,fin,last_seqnum-s_seqnum+1,last_seqnum+1);
+	    if (err==-1){
+	      return err;
+	    }
+	    last_seqnum++;
+	    }
+	}
+      }
+      else if (pkt_get_type(ack)==PTYPE_NACK){
+	
+      }
+    }
   }
-  free(timer);
-  free(readfds);
-  fclose(fichier);
+
       /* err=send_packet(buf,sfd,fin); */
       /* if (err==-1){ */
       /* 	return err; */
       /* } */
       /* fin=fread( buf , sizeof(char), SIZE , fichier ); */
-      /* printf("while\n"); */
+  printf("fin while\n");
+
 }
 
 /* int write_loop(int sfd){ */
@@ -275,9 +302,5 @@ int main(int argc,char *argv[]){
     {
        exit(EXIT_FAILURE);
     }
-  int j;
-  for(j=0;i<=30;j++){
-    //free(buf_frame[j]);
-  }
 return EXIT_SUCCESS;
 }

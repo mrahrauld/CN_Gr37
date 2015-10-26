@@ -73,7 +73,6 @@ pkt_t *recieve_packet(char *buf,int sfd){
     perror(NULL);
     return NULL;
   }   
-      printf("quoi\n");
   pkt_t *pkt = pkt_new();
   pkt_status_code err= pkt_decode(buf,read_count,pkt);
   memset((void *) buf,0,sizeof(char)*SIZE);
@@ -82,32 +81,37 @@ pkt_t *recieve_packet(char *buf,int sfd){
     return NULL;
   }
   int count=pkt_get_seqnum(pkt)-c_seqnum;
+  printf("pkt_seqnum: %d   c_seqnum: %d  \n",pkt_get_seqnum(pkt),c_seqnum);
   if(count==0){ //si il s'agit du packet attendu
+    
+    printf("packet attendu\n");
     ssize_t write_count = write(STDOUT_FILENO,(void *) pkt_get_payload(pkt),read_count);
     if (write_count==-1){
       printf("erreur\n");
       perror(NULL);
     }
     while(pkt_buf[count]!=NULL){ //on vide le buffer des éléments consécutifs
-      
+      printf("vidage buffer\n");
       ssize_t write_count = write(STDOUT_FILENO,(void *) pkt_get_payload(pkt_buf[count]),read_count);
       if (write_count==-1){
 	printf("erreur\n");
 	perror(NULL);
       }
       count++;
+      //pkt_del(pkt_buf[count]);
     }
     send_ack(c_seqnum+count,sfd); //on envoi un ack
-    move_pkt_buf(count+1);
+    move_pkt_buf(count);
     c_seqnum=c_seqnum+1+count;
   }
-  else if( count < max_window &&  pkt_buf[count]!=NULL){ //si il est dans la window et qu'il n'a pas deja été recu
-    pkt_buf[count]=pkt; //on le met dans le buffer
+  else if(count>0 && count < max_window &&  pkt_buf[count-1]==NULL){ //si il est dans la window et qu'il n'a pas deja été recu
+    printf("packet pas attendu\n");
+    pkt_buf[count-1]=pkt; //on le met dans le buffer
     c_window--;
   }
   else { //sinon, on le nie // ENVOYER UN ACK?????
-    pkt_del(pkt);
-    return NULL;
+    printf("packet pas attendu du tout\n");
+    //send_nack(s, int sfd)
   }
   
  
@@ -155,9 +159,7 @@ int recieve_data(int sfd){
     }
     if(ptrfd[0].revents == POLLIN){
       pkt_t *pkt;
-       printf("\n seqnum");
       pkt=recieve_packet(buf,sfd);
-      printf("\n seqnum");
       printf("\n seqnum: %d \n", pkt_get_seqnum(pkt));
       if (err==-1){
 	return err;
