@@ -19,7 +19,7 @@ int max_window= 5;
 int c_window=5; //place dans la window actuelle
 uint8_t c_seqnum=0; //prochain seqnum attendu
 
-
+//attend la reception d'un message pour créer un connection
 int wait_connection (char *hostname, int port)
 {
   if (port <= 0) 
@@ -44,17 +44,7 @@ int wait_connection (char *hostname, int port)
   return sfd;	
 }
 
-/* int read_packet(char *packet, int sfd) */
-/* { */
-/*   ssize_t read_count = read(sfd,(void *) packet,SIZE); */
-/*   if (read_count==-1) */
-/*     { */
-/*       perror(NULL); */
-/*       printf("error read\n"); */
-/*       return -1; */
-/*     }  */
-/*   return read_count; */
-/* }   */
+//permet de décaler le buffer de pkt 
 void move_pkt_buf(int decalage){
   int i;
   c_window=max_window;
@@ -78,9 +68,10 @@ int send_ack(int seqnum, int sfd){
   return 0;
 }
 
+//envoi un nack du seqnum dont des données sont manquantes
 int send_nack(int seqnum, int sfd){
   char *nack=malloc(sizeof(char)*10);
-  create_packet(PTYPE_NACK, c_window, seqnum+1 % 255 , 0, NULL, nack);
+  create_packet(PTYPE_NACK, c_window, seqnum % 256 , 0, NULL, nack);
   ssize_t write_count = write(sfd,(void *) nack,8);
   if (write_count==-1){
     printf("erreur\n");
@@ -90,6 +81,10 @@ int send_nack(int seqnum, int sfd){
   return 0;
 }
 
+//Gere la reception d'un packet
+//lorsque c'est celui attendu, il l'écrit et vide les éléments consécutifs dans le buffer de pkt
+//lorsqu'il appartient à la fenetre mais n'est pas encore dans le buffer, il l'insère dedans
+//S'il n'appartient pas à la fenetre ou qu'il est déjà dans le buffer, il le néglige
 int recieve_packet(char *buf,int sfd,FILE *fichier){
   ssize_t read_count = read(sfd,(void *) buf,SIZE+8);
   if (read_count==-1){
@@ -100,7 +95,7 @@ int recieve_packet(char *buf,int sfd,FILE *fichier){
   pkt_status_code err= pkt_decode(buf,read_count,pkt);
   memset((void *) buf,0,sizeof(char)*SIZE);
   if(err!=0){
-    printf("erreur decode %d\n", pkt_get_seqnum(pkt)); //SEND NACK TMTC MA GUEULE
+    printf("erreur decode %d\n", pkt_get_seqnum(pkt)); 
     send_nack(pkt_get_seqnum(pkt),sfd);
   }
   int count=pkt_get_seqnum(pkt)-c_seqnum;
@@ -112,7 +107,6 @@ int recieve_packet(char *buf,int sfd,FILE *fichier){
       return 0;
     }
     printf("packet attendu\n");
-    printf("%s \n", pkt_get_payload(pkt));
     ssize_t write_count =  fwrite ((void *) pkt_get_payload(pkt), sizeof(char),read_count-8,fichier);//ssize_t write_count = fwrite(fichier,(void *) pkt_get_payload(pkt),read_count);
     if (write_count==-1){
       printf("erreur\n");
@@ -123,7 +117,8 @@ int recieve_packet(char *buf,int sfd,FILE *fichier){
       if(pkt_get_length(pkt_buf[count])==0){ // si c'est le dernier packet
 	return 0;
       }
-      ssize_t write_count =  fwrite ((void *) pkt_get_payload(pkt_buf[count]), sizeof(char),read_count-8,fichier); //fwrite(fichier,(void *) pkt_get_payload(pkt_buf[count]),read_count);
+      c_window++;
+      ssize_t write_count =  fwrite ((void *) pkt_get_payload(pkt_buf[count]), sizeof(char),read_count-8,fichier);
      
       if (write_count==-1){
 	printf("erreur\n");
@@ -143,7 +138,7 @@ int recieve_packet(char *buf,int sfd,FILE *fichier){
     pkt_buf[count-1]=pkt; //on le met dans le buffer
     c_window--;
   }
-  else { //sinon, on le nie // ENVOYER UN ACK?????
+  else { //sinon, on le neglige // ENVOYER UN ACK?????
     printf("packet pas attendu du tout\n");
     //send_nack(s, int sfd)
   }
@@ -153,7 +148,7 @@ int recieve_packet(char *buf,int sfd,FILE *fichier){
 
 }
 
-    
+// boucle while attrapant les données du sfd pour les écrire dans le fichier
 int recieve_data(int sfd,char * file){
   int boucle=1;
   char buf[SIZE];

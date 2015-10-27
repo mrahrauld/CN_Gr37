@@ -35,8 +35,10 @@ int create_connection(char *hostname,int port){
   }
   printf("sfd : %d \n", sfd);
   return sfd;
+  
 }
 
+// permet de decaler le buffer de frames
 void move_buf_frame(int decalage){
   int i;
   for (i=0;i<=10;i++){
@@ -44,6 +46,8 @@ void move_buf_frame(int decalage){
   }
 }
 
+//Permet le decodage du buffer
+//retourne le pkt correspondant
 pkt_t *recieve_packet(char *buf,int sfd){
   ssize_t read_count = read(sfd,(void *) buf,SIZE+8);
   if (read_count==-1){
@@ -63,6 +67,8 @@ pkt_t *recieve_packet(char *buf,int sfd){
   return pkt;
 
 }
+
+//envoie un packet de type PTYPE_DATA sans payload
 int send_last_packet(int place_in_buf_frame,int seqnum, int sfd){
   char *packet=malloc(sizeof(char)*10);
   create_packet(PTYPE_DATA, 0, seqnum % 256, 0, NULL, packet);
@@ -75,9 +81,10 @@ int send_last_packet(int place_in_buf_frame,int seqnum, int sfd){
   } 
   buf_frame[place_in_buf_frame]=packet;
   return 0;
-}		  
-int send_packet(char *buf, int sfd,ssize_t read_count,int place_in_buf_frame,int seqnum){
+}
 
+		  
+int send_packet(char *buf, int sfd,ssize_t read_count,int place_in_buf_frame,int seqnum){
   char *packet = malloc(sizeof(char)*(read_count+11));
   int lenght_packet;
 printf("    send_packet   ");
@@ -104,6 +111,7 @@ printf("    send_packet   ");
   return write_count;
 }
 
+//lance une boucle while permettant d'envoyer le fichier file
 int send_file(char *file, int sfd){
    char buf2[SIZE];
    //pkt_t *ack=malloc(sizeof(pkt_t *));
@@ -129,7 +137,7 @@ int send_file(char *file, int sfd){
     return err;
   }
   while(fin!=0 || end==1){
-    err = poll(ptrfd,(nfds_t) 1,200);
+    err = poll(ptrfd,(nfds_t) 1,4000);
     if(err <= -1){
       perror(NULL);
       return err;
@@ -183,6 +191,7 @@ int send_file(char *file, int sfd){
 	    }
 	    last_seqnum++;
 	    last_send++;
+	    break;
 	  }
 	  else if(fin!=0){
 	    printf("send");
@@ -191,7 +200,7 @@ int send_file(char *file, int sfd){
 	      return err;
 	    }
 	    last_seqnum++;
-	    }
+	  }
 	}
       }
       else if (pkt_get_type(ack)==PTYPE_NACK){
@@ -203,21 +212,15 @@ int send_file(char *file, int sfd){
 	  return -1;
 	}
       }
+      pkt_del(ack);
     }
   }
 
-      /* err=send_packet(buf,sfd,fin); */
-      /* if (err==-1){ */
-      /* 	return err; */
-      /* } */
-      /* fin=fread( buf , sizeof(char), SIZE , fichier ); */
   printf("fin while\n");
    return 0;
 }
 
-/* int write_loop(int sfd){ */
 
-/* } */
 int send_data(int sfd){
   int boucle=1;
   char buf[SIZE];
