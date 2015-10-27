@@ -1,4 +1,5 @@
 
+
 #include <stdlib.h> /* EXIT_X */
 #include <stdio.h> /* fprintf */
 #include <unistd.h> /* getopt */
@@ -73,6 +74,7 @@ int send_last_packet(int place_in_buf_frame,int seqnum, int sfd){
     return -1;
   } 
   buf_frame[place_in_buf_frame]=packet;
+  return 0;
 }		  
 int send_packet(char *buf, int sfd,ssize_t read_count,int place_in_buf_frame,int seqnum){
 
@@ -170,7 +172,7 @@ int send_file(char *file, int sfd){
 	printf("already send : %d     ",already_send);
 	for (i=0;i<s_window-already_send;i++){
 	  printf("in for seqnum : %d \n",last_seqnum+1);
-	  printf("fin: %d \n",fin);
+	  printf("fin: %d \n",(int) fin);
 	  fin=fread( buf , sizeof(char), SIZE , fichier );
 	  printf("fread");
 	  if(fin==0 && last_send==0){
@@ -210,7 +212,7 @@ int send_file(char *file, int sfd){
       /* } */
       /* fin=fread( buf , sizeof(char), SIZE , fichier ); */
   printf("fin while\n");
-
+   return 0;
 }
 
 /* int write_loop(int sfd){ */

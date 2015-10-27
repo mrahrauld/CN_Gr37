@@ -66,12 +66,35 @@ void move_pkt_buf(int decalage){
   }
 
 }
+int send_ack(int seqnum, int sfd){
+  char *ack=malloc(sizeof(char)*10);
+  create_packet(PTYPE_ACK, c_window, seqnum+1 % 255 , 0, NULL, ack);
+  ssize_t write_count = write(sfd,(void *) ack,8);
+  if (write_count==-1){
+    printf("erreur\n");
+    perror(NULL);
+    return -1;
+  } 
+  return 0;
+}
 
-pkt_t *recieve_packet(char *buf,int sfd){
+int send_nack(int seqnum, int sfd){
+  char *nack=malloc(sizeof(char)*10);
+  create_packet(PTYPE_NACK, c_window, seqnum+1 % 255 , 0, NULL, nack);
+  ssize_t write_count = write(sfd,(void *) nack,8);
+  if (write_count==-1){
+    printf("erreur\n");
+    perror(NULL);
+    return -1;
+  } 
+  return 0;
+}
+
+int recieve_packet(char *buf,int sfd,FILE *fichier){
   ssize_t read_count = read(sfd,(void *) buf,SIZE+8);
   if (read_count==-1){
     perror(NULL);
-    return NULL;
+    return -1;
   }   
   pkt_t *pkt = pkt_new();
   pkt_status_code err= pkt_decode(buf,read_count,pkt);
@@ -89,7 +112,8 @@ pkt_t *recieve_packet(char *buf,int sfd){
       return 0;
     }
     printf("packet attendu\n");
-    ssize_t write_count = write(STDOUT_FILENO,(void *) pkt_get_payload(pkt),read_count);
+    printf("%s \n", pkt_get_payload(pkt));
+    ssize_t write_count =  fwrite ((void *) pkt_get_payload(pkt), sizeof(char),read_count-8,fichier);//ssize_t write_count = fwrite(fichier,(void *) pkt_get_payload(pkt),read_count);
     if (write_count==-1){
       printf("erreur\n");
       perror(NULL);
@@ -99,7 +123,8 @@ pkt_t *recieve_packet(char *buf,int sfd){
       if(pkt_get_length(pkt_buf[count])==0){ // si c'est le dernier packet
 	return 0;
       }
-      ssize_t write_count = write(STDOUT_FILENO,(void *) pkt_get_payload(pkt_buf[count]),read_count);
+      ssize_t write_count =  fwrite ((void *) pkt_get_payload(pkt_buf[count]), sizeof(char),read_count-8,fichier); //fwrite(fichier,(void *) pkt_get_payload(pkt_buf[count]),read_count);
+     
       if (write_count==-1){
 	printf("erreur\n");
 	perror(NULL);
@@ -107,7 +132,9 @@ pkt_t *recieve_packet(char *buf,int sfd){
       count++;
       //pkt_del(pkt_buf[count]);
     }
-    send_ack(c_seqnum+count,sfd); //on envoi un ack
+    if(send_ack(c_seqnum+count,sfd)==-1){
+      printf("erreur ack");
+    } //on envoi un ack
     move_pkt_buf(count);
     c_seqnum=c_seqnum+1+count;
   }
@@ -126,33 +153,17 @@ pkt_t *recieve_packet(char *buf,int sfd){
 
 }
 
-int send_ack(int seqnum, int sfd){
-  char *ack=malloc(sizeof(char)*10);
-  create_packet(PTYPE_ACK, c_window, seqnum+1 % 255 , 0, NULL, ack);
-  ssize_t write_count = write(sfd,(void *) ack,8);
-  if (write_count==-1){
-    printf("erreur\n");
-    perror(NULL);
-    return NULL;
-  } 
-}
-
-int send_nack(int seqnum, int sfd){
-  char *ack;
-  create_packet(PTYPE_NACK, c_window, seqnum+1 % 255 , 0, NULL, ack);
-  ssize_t write_count = write(sfd,(void *) ack,8);
-  if (write_count==-1){
-    printf("erreur\n");
-    perror(NULL);
-    return NULL;
-  } 
-}
-
     
-int recieve_data(int sfd){
+int recieve_data(int sfd,char * file){
   int boucle=1;
   char buf[SIZE];
   struct pollfd ptrfd[2];
+  FILE *fichier = NULL;
+  fichier  = fopen(file, "w");
+  if (fichier == NULL)
+    {
+      printf("Impossible d'ouvrir le fichier\n");
+    }
   ptrfd[0].fd = sfd;
   ptrfd[0].events = POLLIN;
   ptrfd[1].fd = STDOUT_FILENO;
@@ -165,16 +176,18 @@ int recieve_data(int sfd){
       return err;
     }
     if(ptrfd[0].revents == POLLIN){
-      int err = recieve_packet(buf,sfd);
+      int err = recieve_packet(buf,sfd,fichier);
       //printf("\n seqnum: %d \n", pkt_get_seqnum(pkt));
       if (err==-1){
 	return err;
       }
       if (err==0){
+	fclose(fichier);
 	return 0;
       }
     }
   }
+  fclose(fichier);
   return 0;
 }
 
@@ -206,12 +219,13 @@ int main(int argc,char *argv[])
     {
       hostname = argv[1];
       sfd = wait_connection(hostname, atoi(argv[2]));
-       recieve_data(sfd);
+      //recieve_data(sfd);
     }
   else
     {
       hostname = argv[i+1];
       sfd = wait_connection(hostname, atoi(argv[i+2]));
+      recieve_data(sfd,filename);
     }
   if (sfd == -1)
     {

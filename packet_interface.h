@@ -100,6 +100,8 @@ pkt_status_code pkt_set_crc   (pkt_t* pkt, const uint32_t crc);
 pkt_status_code pkt_set_payload(pkt_t* pkt,
                                 const char *data,
                                 const uint16_t length);
+void print_pkt(pkt_t *pkt);
+int create_packet(uint8_t type, uint8_t window, uint8_t seqnum, uint16_t length, char *data, char *packet);
 
 
 #endif
