@@ -62,28 +62,43 @@ pkt_t *recieve_packet(char *buf,int sfd){
   return pkt;
 
 }
-		  
+int send_last_packet(int place_in_buf_frame,int seqnum, int sfd){
+  char *packet=malloc(sizeof(char)*10);
+  create_packet(PTYPE_DATA, 0, seqnum % 256, 0, NULL, packet);
+  ssize_t write_count = write(sfd,(void *) packet,8);
+  
+  if (write_count==-1){
+    printf("erreur\n");
+    perror(NULL);
+    return -1;
+  } 
+  buf_frame[place_in_buf_frame]=packet;
+}		  
 int send_packet(char *buf, int sfd,ssize_t read_count,int place_in_buf_frame,int seqnum){
 
   char *packet = malloc(sizeof(char)*(read_count+11));
   int lenght_packet;
+printf("    send_packet   ");
   if (read_count==512){
-    lenght_packet = create_packet((uint8_t) 1, (uint8_t) s_window, (uint8_t) seqnum, (uint16_t) read_count, buf, packet);
+    lenght_packet = create_packet(PTYPE_DATA, (uint8_t) s_window, (uint8_t) seqnum % 256, (uint16_t) read_count, buf, packet);
   }
   else {
-    lenght_packet = create_packet((uint8_t) 1, (uint8_t) s_window, (uint8_t) seqnum, (uint16_t) read_count-1, buf, packet);
+    lenght_packet = create_packet(PTYPE_DATA, (uint8_t) s_window, (uint8_t) seqnum % 256, (uint16_t) read_count-1, buf, packet);
   }
   if (lenght_packet <= 0){
     return lenght_packet;
   }
+printf("    send_packet   ");
   ssize_t write_count = write(sfd,(void *) packet, lenght_packet);
   if (write_count== -1){
     printf("error write\n");
     perror(NULL);
     return -1;
   }
+printf("    send_packet   ");
   buf_frame[place_in_buf_frame]=packet;
   memset((void *) buf,0,sizeof(char)*SIZE);
+  printf("    send_packet   ");
   return write_count;
 }
 
@@ -98,21 +113,21 @@ int send_file(char *file, int sfd){
      }
   char buf[SIZE+8];
   int end=1;
-  
+  int last_send=0;
+
   struct pollfd ptrfd[2];
   ptrfd[0].fd = sfd;
   ptrfd[0].events = POLLIN;
   int err;
+  
   
   size_t fin=fread( buf , sizeof(char), SIZE , fichier );
   err=send_packet(buf,sfd,fin,0,0);
   if (err==-1){
     return err;
   }
-
   while(fin!=0 || end==1){
     err = poll(ptrfd,(nfds_t) 1,200);
-    //printf("poll\n");
     if(err <= -1){
       perror(NULL);
       return err;
@@ -126,70 +141,7 @@ int send_file(char *file, int sfd){
 	  return -1;
 	}
     }
-    if(ptrfd[0].revents == POLLIN){ // de l'information est prête à être lue
-
-      /* fin=fread( buf , sizeof(char), SIZE , fichier ); */
-      /* if(fin==0){ */
-      /* 	break; */
-      /* } */
-      /* err=send_packet(buf,sfd,fin,last_seqnum-s_seqnum+1,3); */
-      /* if (err==-1){ */
-      /* 	return err; */
-      /* } */
-      /* fin=fread( buf , sizeof(char), SIZE , fichier ); */
-      /* if(fin==0){ */
-      /* 	break; */
-      /* } */
-      /* err=send_packet(buf,sfd,fin,last_seqnum-s_seqnum+1,2); */
-      /* if (err==-1){ */
-      /* 	return err; */
-      /* } */
-      /* fin=fread( buf , sizeof(char), SIZE , fichier ); */
-      /* if(fin==0){ */
-      /* 	break; */
-      /* } */
-      /* fin=fread( buf , sizeof(char), SIZE , fichier ); */
-      /* if(fin==0){ */
-      /* 	break; */
-      /* } */
-      /* err=send_packet(buf,sfd,fin,last_seqnum-s_seqnum+1,1); */
-      /* if (err==-1){ */
-      /* 	return err; */
-      /* } */
-      /* fin=fread( buf , sizeof(char), SIZE , fichier ); */
-      /* if(fin==0){ */
-      /* 	break; */
-      /* } */
-      /* err=send_packet(buf,sfd,fin,last_seqnum-s_seqnum+1,4); */
-      /* if (err==-1){ */
-      /* 	return err; */
-      /* } */
-      /* fin=fread( buf , sizeof(char), SIZE , fichier ); */
-      /* if(fin==0){ */
-      /* 	break; */
-      /* } */
-      /* err=send_packet(buf,sfd,fin,last_seqnum-s_seqnum+1,6); */
-      /* if (err==-1){ */
-      /* 	return err; */
-      /* } */
-      /* fin=fread( buf , sizeof(char), SIZE , fichier ); */
-      /* if(fin==0){ */
-      /* 	break; */
-      /* } */
-      /* err=send_packet(buf,sfd,fin,last_seqnum-s_seqnum+1,5); */
-      /* if (err==-1){ */
-      /* 	return err; */
-      /* } */
-      /* fin=fread( buf , sizeof(char), SIZE , fichier ); */
-      /* if(fin==0){ */
-      /* 	break; */
-      /* } */
-      /* err=send_packet(buf,sfd,fin,last_seqnum-s_seqnum+1,1); */
-      /* if (err==-1){ */
-      /* 	return err; */
-      /* } */
-      
-      
+    if(err>0 && ptrfd[0].revents == POLLIN){ // de l'information est prête à être lue
       pkt_t *ack=recieve_packet(buf2,sfd);
       printf("\n ack : %d \n",pkt_get_seqnum(ack));
       if (pkt_get_type(ack)==PTYPE_ACK){
@@ -204,12 +156,35 @@ int send_file(char *file, int sfd){
 	printf("s_window : %d\n",s_window);
 	printf("last_seqnum : %d\n",last_seqnum);
 	int i;
-	int already_send = last_seqnum-s_seqnum+1; //deja envoyés dans la window
+	int already_send=0;
+	if(last_seqnum-s_seqnum==-1){ 
+	  already_send = 0; //deja envoyés dans la window
+	}
+	else{
+	  uint8_t counter= s_seqnum;
+	  while(counter != last_seqnum){
+	    counter++;
+	    already_send++;
+	  }
+	}
+	printf("already send : %d     ",already_send);
 	for (i=0;i<s_window-already_send;i++){
 	  printf("in for seqnum : %d \n",last_seqnum+1);
+	  printf("fin: %d \n",fin);
 	  fin=fread( buf , sizeof(char), SIZE , fichier );
-	    if(fin!=0){
-	    err=send_packet(buf,sfd,fin,last_seqnum-s_seqnum+1,last_seqnum+1);
+	  printf("fread");
+	  if(fin==0 && last_send==0){
+	    printf("last_send\n \n");
+	    err=send_last_packet(already_send+i,last_seqnum+1,sfd);
+	    if (err==-1){
+	      return err;
+	    }
+	    last_seqnum++;
+	    last_send++;
+	  }
+	  else if(fin!=0){
+	    printf("send");
+	    err=send_packet(buf,sfd,fin,already_send+i,last_seqnum+1);
 	    if (err==-1){
 	      return err;
 	    }
@@ -218,7 +193,13 @@ int send_file(char *file, int sfd){
 	}
       }
       else if (pkt_get_type(ack)==PTYPE_NACK){
-	
+	int nack_seqnum = pkt_get_seqnum(ack);
+	ssize_t write_count = write(sfd,(void *)buf_frame[nack_seqnum-s_seqnum], SIZE+8);
+	if (write_count== -1){
+	  printf("error write\n");
+	  perror(NULL);
+	  return -1;
+	}
       }
     }
   }
@@ -246,6 +227,7 @@ int send_data(int sfd){
   int err;
   while(boucle){
     err = poll(ptrfd,2,-1);
+    
     if(err == -1){
       perror(NULL);
       return err;
@@ -295,6 +277,7 @@ int main(int argc,char *argv[]){
   else
     {
       hostname = argv[i+1];
+      printf("%s \n",hostname);
       sfd = create_connection(hostname, atoi(argv[i+2]));
       send_file(filename ,sfd);
     }

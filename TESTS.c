@@ -11,8 +11,8 @@ int main ( int argc, char *argv[]){
   /* test_type(); */
   /* test_seqnum(); */
   /* test_payload(); */
-  test_encode();
-  //test_decode();
+  // test_encode();
+  test_decode();
 }
 
 int test_window(){

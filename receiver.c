@@ -13,11 +13,11 @@
 #include "packet_interface.h"
 
 #define SIZE 512
-
+int count_tot=0;
 pkt_t *pkt_buf[31];
 int max_window= 5;
 int c_window=5; //place dans la window actuelle
-int c_seqnum=0; //prochain seqnum attendu
+uint8_t c_seqnum=0; //prochain seqnum attendu
 
 
 int wait_connection (char *hostname, int port)
@@ -77,13 +77,17 @@ pkt_t *recieve_packet(char *buf,int sfd){
   pkt_status_code err= pkt_decode(buf,read_count,pkt);
   memset((void *) buf,0,sizeof(char)*SIZE);
   if(err!=0){
-    printf("erreur decode\n"); //SEND NACK TMTC MA GUEULE
-    return NULL;
+    printf("erreur decode %d\n", pkt_get_seqnum(pkt)); //SEND NACK TMTC MA GUEULE
+    send_nack(pkt_get_seqnum(pkt),sfd);
   }
   int count=pkt_get_seqnum(pkt)-c_seqnum;
   printf("pkt_seqnum: %d   c_seqnum: %d  \n",pkt_get_seqnum(pkt),c_seqnum);
+  count_tot++;
+  printf("\n %d \n", count_tot);
   if(count==0){ //si il s'agit du packet attendu
-    
+    if(pkt_get_length(pkt)==0){ // si c'est le dernier packet
+      return 0;
+    }
     printf("packet attendu\n");
     ssize_t write_count = write(STDOUT_FILENO,(void *) pkt_get_payload(pkt),read_count);
     if (write_count==-1){
@@ -92,6 +96,9 @@ pkt_t *recieve_packet(char *buf,int sfd){
     }
     while(pkt_buf[count]!=NULL){ //on vide le buffer des éléments consécutifs
       printf("vidage buffer\n");
+      if(pkt_get_length(pkt_buf[count])==0){ // si c'est le dernier packet
+	return 0;
+      }
       ssize_t write_count = write(STDOUT_FILENO,(void *) pkt_get_payload(pkt_buf[count]),read_count);
       if (write_count==-1){
 	printf("erreur\n");
@@ -115,14 +122,14 @@ pkt_t *recieve_packet(char *buf,int sfd){
   }
   
  
-  return pkt;
+  return 1;
 
 }
 
 int send_ack(int seqnum, int sfd){
   char *ack=malloc(sizeof(char)*10);
   create_packet(PTYPE_ACK, c_window, seqnum+1 % 255 , 0, NULL, ack);
-    ssize_t write_count = write(sfd,(void *) ack,8);
+  ssize_t write_count = write(sfd,(void *) ack,8);
   if (write_count==-1){
     printf("erreur\n");
     perror(NULL);
@@ -158,11 +165,13 @@ int recieve_data(int sfd){
       return err;
     }
     if(ptrfd[0].revents == POLLIN){
-      pkt_t *pkt;
-      pkt=recieve_packet(buf,sfd);
-      printf("\n seqnum: %d \n", pkt_get_seqnum(pkt));
+      int err = recieve_packet(buf,sfd);
+      //printf("\n seqnum: %d \n", pkt_get_seqnum(pkt));
       if (err==-1){
 	return err;
+      }
+      if (err==0){
+	return 0;
       }
     }
   }
